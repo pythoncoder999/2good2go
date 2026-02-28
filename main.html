@@ -1,0 +1,511 @@
+import { useState, useEffect } from “react”;
+
+const initialInventory = [
+{ id: 1, name: “Sourdough Loaves”, category: “Bakery”, quantity: 12, unit: “loaves”, expiresIn: 1, location: “Shelf A”, status: “urgent” },
+{ id: 2, name: “Croissants”, category: “Bakery”, quantity: 24, unit: “pieces”, expiresIn: 0, location: “Display Case”, status: “critical” },
+{ id: 3, name: “Greek Yogurt”, category: “Dairy”, quantity: 8, unit: “cups”, expiresIn: 2, location: “Fridge 1”, status: “soon” },
+{ id: 4, name: “Mixed Salads”, category: “Prepared”, quantity: 6, unit: “bowls”, expiresIn: 0, location: “Fridge 2”, status: “critical” },
+{ id: 5, name: “Quiche Slices”, category: “Prepared”, quantity: 9, unit: “slices”, expiresIn: 1, location: “Hot Case”, status: “urgent” },
+{ id: 6, name: “Muffins”, category: “Bakery”, quantity: 18, unit: “pieces”, expiresIn: 1, location: “Shelf B”, status: “urgent” },
+{ id: 7, name: “Cheddar Block”, category: “Dairy”, quantity: 3, unit: “blocks”, expiresIn: 5, location: “Fridge 1”, status: “ok” },
+{ id: 8, name: “Fresh Pasta”, category: “Prepared”, quantity: 4, unit: “portions”, expiresIn: 2, location: “Fridge 3”, status: “soon” },
+];
+
+const initialBags = [
+{ id: 1, name: “Bakery Rescue Bag”, price: 3.99, value: 12, items: [“Sourdough”, “Croissants”, “Muffins”], pickupStart: “7:00 PM”, pickupEnd: “8:30 PM”, available: 5, sold: 3, status: “active” },
+{ id: 2, name: “Lunch Special Bag”, price: 4.99, value: 15, items: [“Salad”, “Quiche”, “Pasta”], pickupStart: “2:00 PM”, pickupEnd: “3:30 PM”, available: 4, sold: 4, status: “sold_out” },
+{ id: 3, name: “Dairy & More Bag”, price: 2.99, value: 9, items: [“Yogurt”, “Cheese”], pickupStart: “6:00 PM”, pickupEnd: “7:00 PM”, available: 3, sold: 0, status: “scheduled” },
+];
+
+const CATEGORIES = [“All”, “Bakery”, “Dairy”, “Prepared”, “Produce”, “Drinks”];
+const STATUS_CONFIG = {
+critical: { label: “Expires Today”, color: “#ff3b3b”, bg: “#fff0f0”, pulse: true },
+urgent: { label: “1 Day Left”, color: “#ff8c00”, bg: “#fff8f0”, pulse: false },
+soon: { label: “2-3 Days”, color: “#f5c400”, bg: “#fffdf0”, pulse: false },
+ok: { label: “Good”, color: “#22c55e”, bg: “#f0fff4”, pulse: false },
+};
+
+function StatusBadge({ status }) {
+const cfg = STATUS_CONFIG[status];
+return (
+<span style={{
+background: cfg.bg,
+color: cfg.color,
+border: `1.5px solid ${cfg.color}`,
+borderRadius: “20px”,
+padding: “2px 10px”,
+fontSize: “11px”,
+fontWeight: “700”,
+letterSpacing: “0.04em”,
+display: “inline-flex”,
+alignItems: “center”,
+gap: “5px”,
+}}>
+{cfg.pulse && <span style={{
+width: 7, height: 7, borderRadius: “50%”, background: cfg.color,
+animation: “pulse 1.2s infinite”,
+display: “inline-block”,
+flexShrink: 0,
+}} />}
+{cfg.label}
+</span>
+);
+}
+
+function InventoryCard({ item, onAddToBag }) {
+return (
+<div style={{
+background: “#fff”,
+border: “1.5px solid #efe8dc”,
+borderRadius: “16px”,
+padding: “18px”,
+display: “flex”,
+flexDirection: “column”,
+gap: “10px”,
+transition: “box-shadow 0.2s”,
+boxShadow: item.status === “critical” ? “0 0 0 2px #ff3b3b30” : “none”,
+}}>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “flex-start” }}>
+<div>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontWeight: 700, fontSize: “15px”, color: “#1a1208” }}>{item.name}</div>
+<div style={{ fontSize: “12px”, color: “#9e8b70”, marginTop: “2px” }}>{item.location} · {item.category}</div>
+</div>
+<StatusBadge status={item.status} />
+</div>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center” }}>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontSize: “24px”, fontWeight: 800, color: “#1a1208” }}>
+{item.quantity} <span style={{ fontSize: “13px”, fontWeight: 500, color: “#9e8b70” }}>{item.unit}</span>
+</div>
+<button
+onClick={() => onAddToBag(item)}
+style={{
+background: “#2d6a4f”,
+color: “#fff”,
+border: “none”,
+borderRadius: “10px”,
+padding: “7px 14px”,
+fontSize: “12px”,
+fontWeight: “700”,
+cursor: “pointer”,
+fontFamily: “‘Syne’, sans-serif”,
+letterSpacing: “0.02em”,
+}}
+> + Add to Bag</button>
+</div>
+</div>
+);
+}
+
+function BagCard({ bag }) {
+const fillPct = Math.round((bag.sold / (bag.available + bag.sold)) * 100);
+const statusColors = { active: “#2d6a4f”, sold_out: “#ff3b3b”, scheduled: “#6b7280” };
+const statusLabels = { active: “● Live”, sold_out: “Sold Out”, scheduled: “Scheduled” };
+
+return (
+<div style={{
+background: “#fff”,
+border: “1.5px solid #efe8dc”,
+borderRadius: “16px”,
+padding: “20px”,
+display: “flex”,
+flexDirection: “column”,
+gap: “12px”,
+}}>
+<div style={{ display: “flex”, justifyContent: “space-between”, alignItems: “center” }}>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontWeight: 800, fontSize: “16px”, color: “#1a1208” }}>{bag.name}</div>
+<span style={{ color: statusColors[bag.status], fontWeight: 700, fontSize: “12px”, fontFamily: “‘Syne’, sans-serif” }}>
+{statusLabels[bag.status]}
+</span>
+</div>
+<div style={{ display: “flex”, gap: “16px” }}>
+<div style={{ background: “#f7f2ea”, borderRadius: “10px”, padding: “10px 14px”, flex: 1, textAlign: “center” }}>
+<div style={{ fontSize: “11px”, color: “#9e8b70”, fontWeight: 600 }}>PRICE</div>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontWeight: 800, fontSize: “20px”, color: “#2d6a4f” }}>${bag.price}</div>
+</div>
+<div style={{ background: “#f7f2ea”, borderRadius: “10px”, padding: “10px 14px”, flex: 1, textAlign: “center” }}>
+<div style={{ fontSize: “11px”, color: “#9e8b70”, fontWeight: 600 }}>VALUE</div>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontWeight: 800, fontSize: “20px”, color: “#1a1208” }}>${bag.value}</div>
+</div>
+<div style={{ background: “#f7f2ea”, borderRadius: “10px”, padding: “10px 14px”, flex: 1, textAlign: “center” }}>
+<div style={{ fontSize: “11px”, color: “#9e8b70”, fontWeight: 600 }}>LEFT</div>
+<div style={{ fontFamily: “‘Syne’, sans-serif”, fontWeight: 800, fontSize: “20px”, color: “#1a1208” }}>{bag.available}</div>
+</div>
+</div>
+<div>
+<div style={{ display: “flex”, justifyContent: “space-between”, fontSize: “12px”, color: “#9e8b70”, marginBottom: “5px” }}>
+<span>{bag.sold} sold</span>
+<span>Pickup {bag.pickupStart}–{bag.pickupEnd}</span>
+</div>
+<div style={{ background: “#efe8dc”, borderRadius: “99px”, height: “6px”, overflow: “hidden” }}>
+<div style={{
+height: “100%”,
+width: `${fillPct}%`,
+background: bag.status === “sold_out” ? “#ff3b3b” : “#2d6a4f”,
+borderRadius: “99px”,
+transition: “width 0.5s ease”,
+}} />
+</div>
+</div>
+<div style={{ display: “flex”, flexWrap: “wrap”, gap: “6px” }}>
+{bag.items.map(item => (
+<span key={item} style={{
+background: “#f7f2ea”,
+borderRadius: “20px”,
+padding: “3px 10px”,
+fontSize: “11px”,
+color: “#6b5a40”,
+fontWeight: 600,
+}}>{item}</span>
+))}
+</div>
+</div>
+);
+}
+
+export default function App() {
+const [tab, setTab] = useState(“inventory”);
+const [inventory, setInventory] = useState(initialInventory);
+const [bags, setBags] = useState(initialBags);
+const [filterCat, setFilterCat] = useState(“All”);
+const [showAddModal, setShowAddModal] = useState(false);
+const [notification, setNotification] = useState(null);
+const [newItem, setNewItem] = useState({ name: “”, category: “Bakery”, quantity: “”, unit: “”, expiresIn: “”, location: “” });
+
+const critical = inventory.filter(i => i.status === “critical”).length;
+const urgent = inventory.filter(i => i.status === “urgent”).length;
+const totalSaved = bags.reduce((sum, b) => sum + b.sold, 0);
+const revenue = bags.reduce((sum, b) => sum + b.sold * b.price, 0).toFixed(2);
+const co2Saved = (totalSaved * 2.5).toFixed(1);
+
+const filtered = filterCat === “All” ? inventory : inventory.filter(i => i.category === filterCat);
+
+const notify = (msg) => {
+setNotification(msg);
+setTimeout(() => setNotification(null), 3000);
+};
+
+const handleAddToBag = (item) => {
+notify(`✓ ${item.name} flagged for next bag`);
+};
+
+const handleAddItem = () => {
+if (!newItem.name || !newItem.quantity) return;
+const exp = parseInt(newItem.expiresIn) || 3;
+const status = exp === 0 ? “critical” : exp === 1 ? “urgent” : exp <= 3 ? “soon” : “ok”;
+setInventory(prev => […prev, { …newItem, id: Date.now(), quantity: parseInt(newItem.quantity), expiresIn: exp, status }]);
+setNewItem({ name: “”, category: “Bakery”, quantity: “”, unit: “”, expiresIn: “”, location: “” });
+setShowAddModal(false);
+notify(`✓ ${newItem.name} added to inventory`);
+};
+
+const inputStyle = {
+width: “100%”,
+padding: “10px 12px”,
+borderRadius: “10px”,
+border: “1.5px solid #efe8dc”,
+background: “#faf6f0”,
+fontFamily: “‘Syne’, sans-serif”,
+fontSize: “14px”,
+color: “#1a1208”,
+outline: “none”,
+boxSizing: “border-box”,
+};
+
+return (
+<div style={{
+minHeight: “100vh”,
+background: “#faf6f0”,
+fontFamily: “‘DM Sans’, sans-serif”,
+color: “#1a1208”,
+}}>
+<style>{`@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap'); @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} } @keyframes slideIn { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} } @keyframes fadeIn { from{opacity:0} to{opacity:1} } * { box-sizing: border-box; } ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #faf6f0; } ::-webkit-scrollbar-thumb { background: #d5c9b8; border-radius: 99px; }`}</style>
+
+```
+ {/* Header */}
+ <div style={{
+   background: "#fff",
+   borderBottom: "1.5px solid #efe8dc",
+   padding: "0 24px",
+   position: "sticky",
+   top: 0,
+   zIndex: 100,
+ }}>
+   <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", height: 64 }}>
+     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+       <div style={{
+         width: 36, height: 36, borderRadius: "10px", background: "#2d6a4f",
+         display: "flex", alignItems: "center", justifyContent: "center",
+         fontSize: "18px",
+       }}>🌱</div>
+       <div>
+         <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "17px", color: "#1a1208", lineHeight: 1 }}>
+           Too Good To Go
+         </div>
+         <div style={{ fontSize: "11px", color: "#9e8b70", fontWeight: 500 }}>Food Manager · Iowa</div>
+       </div>
+     </div>
+     {critical > 0 && (
+       <div style={{
+         background: "#ff3b3b", color: "#fff",
+         borderRadius: "20px", padding: "5px 12px",
+         fontSize: "12px", fontWeight: 700,
+         fontFamily: "'Syne', sans-serif",
+         animation: "pulse 1.5s infinite",
+       }}>
+         ⚠ {critical} item{critical > 1 ? "s" : ""} expire today
+       </div>
+     )}
+   </div>
+ </div>
+
+ {/* Notification */}
+ {notification && (
+   <div style={{
+     position: "fixed", top: 76, right: 24, zIndex: 999,
+     background: "#2d6a4f", color: "#fff",
+     padding: "12px 20px", borderRadius: "12px",
+     fontWeight: 600, fontSize: "14px",
+     animation: "slideIn 0.3s ease",
+     boxShadow: "0 4px 20px rgba(45,106,79,0.3)",
+   }}>
+     {notification}
+   </div>
+ )}
+
+ <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 24px" }}>
+
+   {/* Stats Row */}
+   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 28 }}>
+     {[
+       { label: "Items Tracked", value: inventory.length, icon: "📦", color: "#1a1208" },
+       { label: "Bags Sold Today", value: totalSaved, icon: "🛍️", color: "#2d6a4f" },
+       { label: "Revenue Saved", value: `$${revenue}`, icon: "💰", color: "#2d6a4f" },
+       { label: "CO₂ Saved (kg)", value: co2Saved, icon: "🌍", color: "#2d6a4f" },
+     ].map(s => (
+       <div key={s.label} style={{
+         background: "#fff", border: "1.5px solid #efe8dc",
+         borderRadius: "16px", padding: "16px 18px",
+       }}>
+         <div style={{ fontSize: "20px", marginBottom: 6 }}>{s.icon}</div>
+         <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "22px", color: s.color }}>{s.value}</div>
+         <div style={{ fontSize: "11px", color: "#9e8b70", fontWeight: 600, marginTop: 2 }}>{s.label}</div>
+       </div>
+     ))}
+   </div>
+
+   {/* Tabs */}
+   <div style={{ display: "flex", gap: 4, background: "#efe8dc", borderRadius: "14px", padding: 4, marginBottom: 24, width: "fit-content" }}>
+     {["inventory", "bags", "analytics"].map(t => (
+       <button key={t} onClick={() => setTab(t)} style={{
+         background: tab === t ? "#fff" : "transparent",
+         border: "none",
+         borderRadius: "10px",
+         padding: "8px 20px",
+         fontFamily: "'Syne', sans-serif",
+         fontWeight: 700,
+         fontSize: "13px",
+         color: tab === t ? "#1a1208" : "#9e8b70",
+         cursor: "pointer",
+         transition: "all 0.2s",
+         boxShadow: tab === t ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+         textTransform: "capitalize",
+       }}>{t}</button>
+     ))}
+   </div>
+
+   {/* Inventory Tab */}
+   {tab === "inventory" && (
+     <div style={{ animation: "fadeIn 0.3s ease" }}>
+       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+           {CATEGORIES.map(c => (
+             <button key={c} onClick={() => setFilterCat(c)} style={{
+               background: filterCat === c ? "#2d6a4f" : "#fff",
+               color: filterCat === c ? "#fff" : "#6b5a40",
+               border: "1.5px solid " + (filterCat === c ? "#2d6a4f" : "#efe8dc"),
+               borderRadius: "20px", padding: "5px 14px",
+               fontFamily: "'Syne', sans-serif", fontWeight: 600, fontSize: "12px",
+               cursor: "pointer", transition: "all 0.15s",
+             }}>{c}</button>
+           ))}
+         </div>
+         <button onClick={() => setShowAddModal(true)} style={{
+           background: "#2d6a4f", color: "#fff",
+           border: "none", borderRadius: "12px",
+           padding: "9px 18px",
+           fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "13px",
+           cursor: "pointer",
+         }}>+ Add Item</button>
+       </div>
+       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+         {filtered.map(item => (
+           <InventoryCard key={item.id} item={item} onAddToBag={handleAddToBag} />
+         ))}
+       </div>
+     </div>
+   )}
+
+   {/* Bags Tab */}
+   {tab === "bags" && (
+     <div style={{ animation: "fadeIn 0.3s ease" }}>
+       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+         <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "15px", color: "#9e8b70" }}>
+           {bags.filter(b => b.status === "active").length} active · {bags.filter(b => b.status === "sold_out").length} sold out
+         </div>
+         <button onClick={() => notify("✓ New bag template created")} style={{
+           background: "#2d6a4f", color: "#fff",
+           border: "none", borderRadius: "12px",
+           padding: "9px 18px",
+           fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: "13px",
+           cursor: "pointer",
+         }}>+ Create Bag</button>
+       </div>
+       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+         {bags.map(bag => <BagCard key={bag.id} bag={bag} />)}
+       </div>
+     </div>
+   )}
+
+   {/* Analytics Tab */}
+   {tab === "analytics" && (
+     <div style={{ animation: "fadeIn 0.3s ease" }}>
+       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+         {/* Waste by Category */}
+         <div style={{ background: "#fff", border: "1.5px solid #efe8dc", borderRadius: "16px", padding: "22px" }}>
+           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "15px", marginBottom: 16 }}>At-Risk by Category</div>
+           {["Bakery", "Prepared", "Dairy"].map(cat => {
+             const items = inventory.filter(i => i.category === cat);
+             const atRisk = items.filter(i => i.status === "critical" || i.status === "urgent").length;
+             const pct = items.length ? Math.round((atRisk / items.length) * 100) : 0;
+             return (
+               <div key={cat} style={{ marginBottom: 14 }}>
+                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: 5 }}>
+                   <span style={{ fontWeight: 600, color: "#1a1208" }}>{cat}</span>
+                   <span style={{ color: "#9e8b70" }}>{atRisk}/{items.length} items</span>
+                 </div>
+                 <div style={{ background: "#efe8dc", borderRadius: "99px", height: 8, overflow: "hidden" }}>
+                   <div style={{
+                     height: "100%", width: `${pct}%`,
+                     background: pct > 60 ? "#ff3b3b" : pct > 30 ? "#ff8c00" : "#2d6a4f",
+                     borderRadius: "99px", transition: "width 0.6s ease",
+                   }} />
+                 </div>
+               </div>
+             );
+           })}
+         </div>
+
+         {/* Daily Summary */}
+         <div style={{ background: "#fff", border: "1.5px solid #efe8dc", borderRadius: "16px", padding: "22px" }}>
+           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "15px", marginBottom: 16 }}>Today's Impact</div>
+           {[
+             { label: "Bags Created", value: bags.length, max: 10 },
+             { label: "Bags Sold", value: totalSaved, max: bags.reduce((s, b) => s + b.available + b.sold, 0) },
+             { label: "Items Rescued", value: totalSaved * 4, max: inventory.length * 2 },
+           ].map(s => (
+             <div key={s.label} style={{ marginBottom: 14 }}>
+               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: 5 }}>
+                 <span style={{ fontWeight: 600 }}>{s.label}</span>
+                 <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#2d6a4f" }}>{s.value}</span>
+               </div>
+               <div style={{ background: "#efe8dc", borderRadius: "99px", height: 8, overflow: "hidden" }}>
+                 <div style={{
+                   height: "100%", width: `${Math.min(100, Math.round((s.value / s.max) * 100))}%`,
+                   background: "#2d6a4f", borderRadius: "99px", transition: "width 0.6s ease",
+                 }} />
+               </div>
+             </div>
+           ))}
+         </div>
+
+         {/* Expiry Timeline */}
+         <div style={{ background: "#fff", border: "1.5px solid #efe8dc", borderRadius: "16px", padding: "22px", gridColumn: "1/-1" }}>
+           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "15px", marginBottom: 16 }}>Expiry Timeline</div>
+           <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+             {["Today", "Tomorrow", "In 2 Days", "3+ Days"].map((day, idx) => {
+               const items = inventory.filter(i => {
+                 if (idx === 0) return i.expiresIn === 0;
+                 if (idx === 1) return i.expiresIn === 1;
+                 if (idx === 2) return i.expiresIn === 2;
+                 return i.expiresIn >= 3;
+               });
+               const colors = ["#ff3b3b", "#ff8c00", "#f5c400", "#22c55e"];
+               return (
+                 <div key={day} style={{
+                   background: colors[idx] + "15",
+                   border: `1.5px solid ${colors[idx]}40`,
+                   borderRadius: "14px", padding: "14px 18px",
+                   flex: "1", minWidth: 140,
+                 }}>
+                   <div style={{ fontSize: "11px", fontWeight: 700, color: colors[idx], marginBottom: 6 }}>{day.toUpperCase()}</div>
+                   <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "28px", color: "#1a1208" }}>{items.length}</div>
+                   <div style={{ fontSize: "11px", color: "#9e8b70", marginTop: 2 }}>items</div>
+                   {items.slice(0, 2).map(i => (
+                     <div key={i.id} style={{ fontSize: "11px", color: "#6b5a40", marginTop: 4, fontWeight: 500 }}>• {i.name}</div>
+                   ))}
+                   {items.length > 2 && <div style={{ fontSize: "11px", color: "#9e8b70", marginTop: 2 }}>+{items.length - 2} more</div>}
+                 </div>
+               );
+             })}
+           </div>
+         </div>
+       </div>
+     </div>
+   )}
+ </div>
+
+ {/* Add Item Modal */}
+ {showAddModal && (
+   <div style={{
+     position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200,
+     display: "flex", alignItems: "center", justifyContent: "center",
+     animation: "fadeIn 0.2s ease",
+   }} onClick={e => e.target === e.currentTarget && setShowAddModal(false)}>
+     <div style={{
+       background: "#fff", borderRadius: "20px", padding: "28px",
+       width: "min(460px, 90vw)", animation: "slideIn 0.3s ease",
+       boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+     }}>
+       <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "20px", marginBottom: 20 }}>Add Inventory Item</div>
+       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+         <input style={inputStyle} placeholder="Item name" value={newItem.name}
+           onChange={e => setNewItem(p => ({...p, name: e.target.value}))} />
+         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+           <input style={inputStyle} placeholder="Quantity" type="number" value={newItem.quantity}
+             onChange={e => setNewItem(p => ({...p, quantity: e.target.value}))} />
+           <input style={inputStyle} placeholder="Unit (e.g. loaves)" value={newItem.unit}
+             onChange={e => setNewItem(p => ({...p, unit: e.target.value}))} />
+         </div>
+         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+           <input style={inputStyle} placeholder="Expires in (days)" type="number" value={newItem.expiresIn}
+             onChange={e => setNewItem(p => ({...p, expiresIn: e.target.value}))} />
+           <input style={inputStyle} placeholder="Location" value={newItem.location}
+             onChange={e => setNewItem(p => ({...p, location: e.target.value}))} />
+         </div>
+         <select style={inputStyle} value={newItem.category}
+           onChange={e => setNewItem(p => ({...p, category: e.target.value}))}>
+           {["Bakery", "Dairy", "Prepared", "Produce", "Drinks"].map(c =>
+             <option key={c}>{c}</option>
+           )}
+         </select>
+         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+           <button onClick={() => setShowAddModal(false)} style={{
+             flex: 1, padding: "11px", border: "1.5px solid #efe8dc",
+             borderRadius: "12px", background: "#fff", cursor: "pointer",
+             fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#9e8b70",
+           }}>Cancel</button>
+           <button onClick={handleAddItem} style={{
+             flex: 2, padding: "11px", border: "none",
+             borderRadius: "12px", background: "#2d6a4f", color: "#fff",
+             cursor: "pointer", fontFamily: "'Syne', sans-serif", fontWeight: 700,
+           }}>Add Item</button>
+         </div>
+       </div>
+     </div>
+   </div>
+ )}
+</div>
+```
+
+);
+}
